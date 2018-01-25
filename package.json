@@ -1,0 +1,29 @@
+{
+  "name": "xfib",
+  "version": "0.0.1",
+  "description": "fully async interceptable reactive boxed values using fibers",
+  "main": "lib/index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mattiamanzati/xfib.git"
+  },
+  "keywords": [
+    "fiber",
+    "reactive",
+    "state",
+    "management"
+  ],
+  "author": "Mattia Manzati",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/mattiamanzati/xfib/issues"
+  },
+  "homepage": "https://github.com/mattiamanzati/xfib#readme",
+  "files": [
+    "README.md",
+    "lib"
+  ]
+}
