@@ -1,6 +1,7 @@
 {
     "compilerOptions": {
         "strict": true,
+        "strictFunctionTypes": false,
         "outDir": "./lib",
         "target": "es5",
         "lib": ["esnext", "dom"]

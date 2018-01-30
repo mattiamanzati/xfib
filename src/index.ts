@@ -22,8 +22,10 @@ function createAtom<T>(name: string, initialValue: T){
 const a = createAtom("a", 0)
 const b = createAtom("b", "hello")
 
-schedule("test", (cb) => {
-    a.set(100)
-    b.set("Hello World!")
-    cb()
-})
+schedule("main", (res, rej) => {
+    schedule("test", (resolve, reject) => {
+        a.set(100)
+        b.set("Hello World!")
+        reject("LOL")
+    }).catch(e => res("child said" + e))
+}).then(e => console.log(e))

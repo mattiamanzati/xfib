@@ -1,8 +1,13 @@
 enum FiberState {
+    // in coda
     Waiting = "Waiting",
+    // sto eseguendo i figli
     Running = "Running",
-    Done = "Done",
-    Killed = "Killed"
+    // ho terminato i figli e sono in errore/terminati
+    Resolved = "Done",
+    Rejected = "Killed",
+    // ho terminato questo nodo
+    Committed = "Committed"
 }
 
 type IFiber = {
@@ -10,120 +15,143 @@ type IFiber = {
     name: string,
     beginWork(): void,
     completeWork(): void
-    child: IFiber | null,
-    sibling: IFiber | null,
+    commitWork(): void,
+    child: IFiber | null
+    sibling: IFiber | null
     return: IFiber | null
 }
 
-let globalFiber: IFiber | null = null
-
-function runWithGlobalFiber<R>(fiber: IFiber, fn: () => R) {
-    const prevFiber = globalFiber
-    globalFiber = fiber
-    const returnValue = fn()
-    globalFiber = prevFiber
-    return returnValue
-}
-
-function createFiber(data: Partial<IFiber>): IFiber {
-    return Object.assign({}, {
-        state: FiberState.Waiting,
-        name: Math.random().toString(36),
-        beginWork() { },
-        completeWork() { },
-        child: null,
-        sibling: null,
-        return: globalFiber ? globalFiber.return : null
-    }, data)
-}
-
-function getLastSibling(fiber: IFiber) {
+function getLastSiblingFiber(fiber: IFiber){
     let c: IFiber = fiber
-    while (c.sibling) {
+    while(c.sibling){
         c = c.sibling
     }
     return c
 }
 
-export function schedule<T>(name: string, fn: (cb: (returnValue?: T) => void) => void) {
-    return new Promise<T>((resolve, reject) => {
-        // state vars
-        let value: any = null
-        let status: FiberState = FiberState.Waiting
+function createFiber(data: Partial<IFiber>){
+    return Object.assign({}, {
+        state: FiberState.Waiting,
+        name: Math.random().toString(36),
+        beginWork(){},
+        completeWork(){},
+        commitWork(){},
+        child: null,
+        sibling: null,
+        return: currentFiber ? currentFiber.return : null
+    }, data)
+}
 
-        // create the spawn fiber
-        const nextFiber = createFiber({
-            name,
-            completeWork(){
-                resolve(value)
-            }
-        })
+let currentFiber: IFiber | null = null
+type IScheduleCallback<T> = (resolve: (value?: T) => void, reject: (value?: any) => void) => void
 
-        const childFiber = createFiber({
-            name: name + "@invoke",
-            beginWork(){
-                runWithGlobalFiber(childFiber, () => fn(resolveStatus(FiberState.Done)))
-            },
-            return: nextFiber
-        })
-        nextFiber.child = childFiber
+export function schedule<T>(name: string, fn: IScheduleCallback<T>){
+    return new Promise((resolve, reject) => {
+        // keep the state and value
+        let state: FiberState = FiberState.Waiting
+        let value: any = undefined
+        let isCompleted = false
 
-        function resolveStatus(newStatus: FiberState){
-            return (newValue?: T) => {
-                // set the status
+        // sets state and value
+        function setValueAtState(newState: FiberState){
+            return (newValue: T) => {
+                // do not run twice
+                if(isCompleted) return
+                isCompleted = true
+
+                // set temporary values
+                state = newState
                 value = newValue
-                status = newStatus
-                childFiber.state = newStatus
+                nextFiber.state = newState
 
-                // revive the work if not running
-                if(!globalFiber){
-                    runWork(childFiber)
+                // resume work if stopped somehow
+                if(!currentFiber){
+                    currentFiber = nextFiber
+                    runWork()
                 }
             }
         }
 
-        // start the work
-        if(!globalFiber){
-            runWork(nextFiber)
+        // create the child fiber to schedule sub-works
+        const childFiber = createFiber({
+            name: name + "@child",
+            beginWork(){
+                childFiber.state = FiberState.Resolved
+            }
+        })
+
+        // create the fiber
+        const nextFiber = createFiber({
+            name,
+            beginWork(){
+                const prevFiber = currentFiber
+                currentFiber = childFiber
+                try{
+                    fn(setValueAtState(FiberState.Resolved), setValueAtState(FiberState.Rejected))
+                }catch(e){
+                    setValueAtState(FiberState.Rejected)(e)
+                }finally{
+                    currentFiber = prevFiber
+                }
+            },
+            commitWork(){
+                if(state === FiberState.Resolved){
+                    resolve(value)
+                }else{
+                    reject(value)
+                }
+            },
+            child: childFiber
+        })
+
+        // set the child to return to parent
+        childFiber.return = nextFiber
+    
+        // kick in work if needed
+        if(!currentFiber){
+            currentFiber = nextFiber
+            runWork()
         }else{
-            getLastSibling(globalFiber).sibling = nextFiber
+            getLastSiblingFiber(currentFiber).sibling = nextFiber
         }
     })
 }
 
-function runWork(rootFiber: IFiber) {
-    let currentFiber: IFiber | null = rootFiber
-    console.log("WORKER: START")
-    while (currentFiber) {
-        console.log("WORKER", currentFiber.name, "=>", currentFiber.state)
-        // se è in waiting, lancio beginWork
-        if (currentFiber.state === FiberState.Waiting) {
+function runWork(){
+    while(currentFiber){
+        // if waiting, begin work
+        if(currentFiber.state === FiberState.Waiting){
+            console.log(currentFiber.name, currentFiber.state.toUpperCase(), "=> RUNNING")
+
             currentFiber.state = FiberState.Running
             currentFiber.beginWork()
-            continue
-        }
-
-        // se è in running, guardo se ci sono figli e in tal caso vado li
-        if (currentFiber.state === FiberState.Running) {
-            // se il figlio ha completato, allora posso completarmi
-            if (currentFiber.child && currentFiber.child.state === FiberState.Done) {
-                currentFiber.state = FiberState.Done
-                continue
-            }
-
-            // in caso contrario vado sul figlio
+        }else if(currentFiber.child && currentFiber.child.state !== FiberState.Committed){
+            // se ci sono figli non committati, vai li
             currentFiber = currentFiber.child
-            continue
-        }
+        }else if(currentFiber.state === FiberState.Rejected){
+            console.log(currentFiber.name, currentFiber.state.toUpperCase(), "=> COMMITTED")
 
-        // se è completato, allora vado al prossimo o al genitore
-        if (currentFiber.state === FiberState.Done) {
-            
-            console.log("WORKER COMPLETE", currentFiber.name)
-            currentFiber.completeWork()
+            // annullo i sibling
+            let c = currentFiber
+            while(c.sibling){
+                c = c.sibling
+                c.state = FiberState.Committed
+            }
+            // committo il corrente
+            currentFiber.state = FiberState.Committed
+            currentFiber.commitWork()
+        }else if(currentFiber.state === FiberState.Resolved){
+            console.log(currentFiber.name, currentFiber.state.toUpperCase(), "=> COMMITTED")
+
+            // committo il corrente lavoro
+            currentFiber.state = FiberState.Committed
+            currentFiber.commitWork()
+        }else if(currentFiber.state === FiberState.Committed){
+            // cerco il prossimo da eseguire
             currentFiber = currentFiber.sibling ? currentFiber.sibling : currentFiber.return
-            continue
+        }else {
+            // niente da fare, esco
+            currentFiber = null
         }
     }
-    console.log("WORKER: DONE")
 }

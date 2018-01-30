@@ -28,7 +28,7 @@
   ],
   "dependencies": {
     "@reactivex/rxjs": "^5.5.6",
-    "rxjs": "^5.5.6"
+    "rxjs": "^6.0.0-alpha.2"
   },
   "devDependencies": {
     "@types/rx": "^4.1.1"
