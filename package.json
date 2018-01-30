@@ -4,7 +4,7 @@
   "description": "fully async interceptable reactive boxed values using fibers",
   "main": "lib/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "tsc && node lib/index.js"
   },
   "repository": {
     "type": "git",
@@ -25,5 +25,12 @@
   "files": [
     "README.md",
     "lib"
-  ]
+  ],
+  "dependencies": {
+    "@reactivex/rxjs": "^5.5.6",
+    "rxjs": "^5.5.6"
+  },
+  "devDependencies": {
+    "@types/rx": "^4.1.1"
+  }
 }
