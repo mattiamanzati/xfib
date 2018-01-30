@@ -1,31 +1,18 @@
-import {schedule} from "./scheduler"
+import { schedule } from "./scheduler"
+import * as Future from "./Future"
 
-function createAtom<T>(name: string, initialValue: T){
-    let value = initialValue
+const delay = (n: number) => Future.create<void>((res) => setTimeout(res, n))
 
-    function get(){
-        return schedule<T>(name + "@get", cb => {
-            cb(value)
-        })
-    }
-
-    function set(newValue: T){
-        return schedule<void>(name + "@set", cb => {
-            value = newValue
-            setTimeout(cb, 1000)
-        })
-    }
-
-    return {get, set}
+function main() {
+    return Future.of(1).chain(v =>
+        delay(1000).map(v => {
+            console.log("Hello")
+        }).chain(v => delay(1000))
+            .map(v => {
+                console.log("World!")
+            })
+    )
 }
 
-const a = createAtom("a", 0)
-const b = createAtom("b", "hello")
-
-schedule("main", (res, rej) => {
-    schedule("test", (resolve, reject) => {
-        a.set(100)
-        b.set("Hello World!")
-        reject("LOL")
-    }).catch(e => res("child said" + e))
-}).then(e => console.log(e))
+Future.all([delay(5000), delay(10000)]).map(v => console.log("Done!"))
+main()
